@@ -1,0 +1,75 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, initial-scale=1">
+	<title>GLTF Test w/ Three.js</title>
+	<script src="three.min.js"></script>
+	<script src="GLTFLoader.js"></script>
+</head>
+<body style="margin:0;">
+	<div id="container" style="height:3000px;">
+	</div>
+	<script>
+		// Assign initial variables
+		let model, bbox;
+		// Define testing container
+		const container = document.getElementById( 'container' );
+
+		// Create new scene object
+		const scene = new THREE.Scene();
+
+		// Create camera and set its position to back and slightly up
+		const camera = new THREE.PerspectiveCamera(
+			75, // FOV
+			window.innerWidth / window.innerHeight, // Aspect ratio
+			0.1, // minimum render distance
+			1000 // maximum render distance
+		);
+		camera.position.z = 10;
+		camera.position.y = 2;
+
+		// [0] Create canvas renderer, [1] set its size to equal the viewer window, [2] set its background to transparent, [3] add it to the container, [4] and style its position as fixed
+		const renderer = new THREE.WebGLRenderer(
+			{ alpha: true },
+			{ antialias: true }
+		);
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		renderer.setClearColor ( 0x000000, 0 );
+		container.appendChild( renderer.domElement );
+		renderer.domElement.style.position = "fixed";
+
+		// Add GLTF loader
+		const objectLoader = new THREE.GLTFLoader();
+		objectLoader.load(
+			//Select specific GLTF file
+			'bust_of_emperor_commodus_getty_villa/scene.gltf',
+			//If working, add gltf to scene
+			function ( gltf ) {
+				model = gltf.scene;
+				scene.add( model );
+				bbox = new THREE.Box3().setFromObject( model );
+
+			},
+			//Create 'loading' countdown
+			function ( xhr ) {
+				console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
+			},
+			//Create 'error' option
+			function ( error ) {
+				console.log ( 'An error happened' );
+			}
+		);
+
+
+		//Function to animate the scene on the canvas
+		function animate() {
+			//Tells the browser that you want to animate and requests a function to update the animation on the next repaint - prevents off-tab animation
+			requestAnimationFrame( animate );
+
+			//Actually renders the scene and the camera 
+			renderer.render( scene, camera );
+		}
+		animate();
+	</script>
+</body>
