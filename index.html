@@ -2,35 +2,38 @@
 <html>
 <head>
 	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, initial-scale=1">
 	<title>GLTF Test w/ Three.js</title>
-	<script src="three.min.js"></script>
-	<script src="GLTFLoader.js"></script>
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, initial-scale=1">
 </head>
 <body style="margin:0;">
 	<div id="container" style="height:3000px;">
 	</div>
+	<script src="three.min.js"></script>
+	<script src="GLTFLoader.js"></script>
 	<script>
 		// Assign initial variables
-		let model, bbox;
+		let container, scene, camera, renderer, objectLoader, model, boundingBox, setFocalPosition;
 		// Define testing container
-		const container = document.getElementById( 'container' );
+		container = document.getElementById( 'container' );
 
 		// Create new scene object
-		const scene = new THREE.Scene();
+		scene = new THREE.Scene();
 
 		// Create camera and set its position to back and slightly up
-		const camera = new THREE.PerspectiveCamera(
+		camera = new THREE.PerspectiveCamera(
 			75, // FOV
 			window.innerWidth / window.innerHeight, // Aspect ratio
 			0.1, // minimum render distance
 			1000 // maximum render distance
 		);
-		camera.position.z = 10;
-		camera.position.y = 2;
+		camera.position.x = 1;
+		camera.position.z = 1;
+		camera.position.y = .3;
+
+
 
 		// [0] Create canvas renderer, [1] set its size to equal the viewer window, [2] set its background to transparent, [3] add it to the container, [4] and style its position as fixed
-		const renderer = new THREE.WebGLRenderer(
+		renderer = new THREE.WebGLRenderer(
 			{ alpha: true },
 			{ antialias: true }
 		);
@@ -40,34 +43,73 @@
 		renderer.domElement.style.position = "fixed";
 
 		// Add GLTF loader
-		const objectLoader = new THREE.GLTFLoader();
+		objectLoader = new THREE.GLTFLoader();
 		objectLoader.load(
-			//Select specific GLTF file
+			// Select specific GLTF file
 			'bust_of_emperor_commodus_getty_villa/scene.gltf',
-			//If working, add gltf to scene
+			// If working, add gltf to scene
 			function ( gltf ) {
 				model = gltf.scene;
-				scene.add( model );
-				bbox = new THREE.Box3().setFromObject( model );
 
+				// Create bounding box with info on size, then rescale to max size of 1
+				boundingBox = new THREE.Box3().setFromObject( model );
+				let boundingBoxSize = boundingBox.getSize( new THREE.Vector3() );
+				let maxAxis = Math.max( boundingBoxSize.x, boundingBoxSize.y, boundingBoxSize.z );
+				model.scale.multiplyScalar( 1.0 / maxAxis );
+
+
+				// Reset bounding box, create its center as inverted array, translate model along that array, reset bounding box
+				boundingBox.setFromObject(model);
+				let boxCenter = boundingBox.getCenter( new THREE.Vector3() );
+				let centerArrayInverse = [];
+				let centerInverse = boxCenter.multiplyScalar( -1 ).toArray(centerArrayInverse);
+				model.translateX( centerArrayInverse[0] );
+				model.translateY( centerArrayInverse[1] );
+				model.translateZ( centerArrayInverse[2] );
+				boundingBox.setFromObject(model);
+
+				// Add bounding box helper
+				let boundingBoxHelper = new THREE.Box3Helper(boundingBox, 0xffff00);
+				scene.add(boundingBoxHelper);
+
+				let gridHelper = new THREE.GridHelper();
+				scene.add(gridHelper);
+
+
+				scene.add( model );
 			},
-			//Create 'loading' countdown
+			//Create 'loading' countdown output
 			function ( xhr ) {
 				console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
 			},
-			//Create 'error' option
+			//Create 'error' output
 			function ( error ) {
 				console.log ( 'An error happened' );
 			}
 		);
 
+		// Set focal position for camera orientation
+		setFocalPosition = function( rangeX, rangeY, rangeZ ) {
+			let minArray = [], maxArray = [];
+			boundingBox.min.toArray(minArray);
+			boundingBox.max.toArray(maxArray);
 
-		//Function to animate the scene on the canvas
+			let xValue = THREE.Math.lerp(minArray[0], maxArray[0], rangeX);
+			let yValue = THREE.Math.lerp(minArray[0], maxArray[0], rangeY);
+			let zValue = THREE.Math.lerp(minArray[0], maxArray[0], rangeZ);
+
+			let output = new THREE.Vector3( xValue, yValue, zValue );
+			return output;
+		} 
+
+		// Function to animate the scene on the canvas
 		function animate() {
-			//Tells the browser that you want to animate and requests a function to update the animation on the next repaint - prevents off-tab animation
+			// Tell the browser that you want to animate and request a function to update the animation on the next repaint - prevents off-tab animation
 			requestAnimationFrame( animate );
 
-			//Actually renders the scene and the camera 
+			if (model) camera.lookAt( setFocalPosition(.5,.85,.5) );
+
+			//Render the scene and the camera 
 			renderer.render( scene, camera );
 		}
 		animate();
