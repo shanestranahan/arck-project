@@ -9,41 +9,75 @@
 	<div id="container" style="height:3000px;">
 	</div>
 	<script src="three.min.js"></script>
+	<script src="stats.min.js"></script>
+
+	<script src="CopyShader.js"></script>
+	<script src="SMAAShader.js"></script>
+
+	<script src="EffectComposer.js"></script>
+	<script src="SMAAPass.js"></script>
 	<script src="GLTFLoader.js"></script>
+	<script src="RenderPass.js"></script>
+	<script src="ShaderPass.js"></script>
 	<script>
-		// Assign initial variables
-		let container, scene, camera, renderer, objectLoader, model, boundingBox, setFocalPosition;
-		// Define testing container
-		container = document.getElementById( 'container' );
 
-		// Create new scene object
-		scene = new THREE.Scene();
+		// INITIAL ASSIGNS
+		// Assign global variables
+		let model, boundingBoxFinal;
+		let container = document.getElementById( 'container' );
 
-		// Create camera and set its position to back and slightly up
-		camera = new THREE.PerspectiveCamera(
+		// CREATE SCENE
+		let scene = new THREE.Scene();
+
+		// CREATE CAMERA
+		// Create camera and set its position
+		let camera = new THREE.PerspectiveCamera(
 			75, // FOV
 			window.innerWidth / window.innerHeight, // Aspect ratio
 			0.1, // minimum render distance
 			1000 // maximum render distance
 		);
-		camera.position.x = 1;
-		camera.position.z = 1;
+		camera.position.x = -.5;
 		camera.position.y = .3;
+		camera.position.z = .6;
 
+		// CREATE LIGHTS
+		// Add directional light to scene
+		let directionalLight = new THREE.DirectionalLight();
+		directionalLight.position.set( 0, 3, 0 );
+		directionalLight.castShadow = true;
+		scene.add( directionalLight );
 
+		// CREATE GEOMETRY
+		// Add floor plane to scene
+		let floorGeometry = new THREE.PlaneGeometry( 2, 2 );
+		let floorMaterial = new THREE.ShadowMaterial();
+		let floorPlane = new THREE.Mesh( floorGeometry, floorMaterial );
+		floorPlane.rotation.x -= Math.PI / 2;
+		scene.add( floorPlane );
 
-		// [0] Create canvas renderer, [1] set its size to equal the viewer window, [2] set its background to transparent, [3] add it to the container, [4] and style its position as fixed
-		renderer = new THREE.WebGLRenderer(
+		// CREATE RENDERER
+		let renderer = new THREE.WebGLRenderer(
 			{ alpha: true },
 			{ antialias: true }
 		);
+		renderer.physicallyCorrectLights = true;
+		renderer.gammaOutput = true;
+		renderer.gammaFactor = 2.2;
+		renderer.shadowMap.enabled = true;
+		renderer.shadowMap.autoUpdate = true;
+		renderer.setPixelRatio(window.devicePixelRatio);
 		renderer.setSize( window.innerWidth, window.innerHeight );
-		renderer.setClearColor ( 0x000000, 0 );
+		renderer.setClearColor( 0xffffff, 0 );
 		container.appendChild( renderer.domElement );
 		renderer.domElement.style.position = "fixed";
 
-		// Add GLTF loader
-		objectLoader = new THREE.GLTFLoader();
+		// ADD STATS
+		let stats = new Stats();
+		container.appendChild( stats.dom );
+
+		// ADD GLTF LOADER
+		let objectLoader = new THREE.GLTFLoader();
 		objectLoader.load(
 			// Select specific GLTF file
 			'bust_of_emperor_commodus_getty_villa/scene.gltf',
@@ -52,11 +86,14 @@
 				model = gltf.scene;
 
 				// Create bounding box with info on size, then rescale to max size of 1
-				boundingBox = new THREE.Box3().setFromObject( model );
+				let boundingBox = new THREE.Box3().setFromObject( model );
 				let boundingBoxSize = boundingBox.getSize( new THREE.Vector3() );
 				let maxAxis = Math.max( boundingBoxSize.x, boundingBoxSize.y, boundingBoxSize.z );
 				model.scale.multiplyScalar( 1.0 / maxAxis );
 
+			    model.traverse( function( node ) {
+			        if ( node.isMesh ) { node.castShadow = true; }
+			    } );
 
 				// Reset bounding box, create its center as inverted array, translate model along that array, reset bounding box
 				boundingBox.setFromObject(model);
@@ -66,11 +103,12 @@
 				model.translateX( centerArrayInverse[0] );
 				model.translateY( centerArrayInverse[1] );
 				model.translateZ( centerArrayInverse[2] );
-				boundingBox.setFromObject(model);
+				boundingBoxFinal = boundingBox.setFromObject(model);
 
 				// Add bounding box helper
 				let boundingBoxHelper = new THREE.Box3Helper(boundingBox, 0xffff00);
 				scene.add(boundingBoxHelper);
+
 
 				let gridHelper = new THREE.GridHelper();
 				scene.add(gridHelper);
@@ -88,29 +126,52 @@
 			}
 		);
 
-		// Set focal position for camera orientation
-		setFocalPosition = function( rangeX, rangeY, rangeZ ) {
+		// CREATE FOCAL POINT
+		// Creates a vector in reference to the bounding box of a given model.
+		// Takes three values, usually set in a closed interval between 0 and 1.
+		// Creates arrays from vectors of min and max of bounding box, then uses provided values to interpolate between the two ends of this range, returning the output as a single vector.
+		setPointInModel = function( rangeX, rangeY, rangeZ ) {
 			let minArray = [], maxArray = [];
-			boundingBox.min.toArray(minArray);
-			boundingBox.max.toArray(maxArray);
+			boundingBoxFinal.min.toArray( minArray );
+			boundingBoxFinal.max.toArray( maxArray );
 
-			let xValue = THREE.Math.lerp(minArray[0], maxArray[0], rangeX);
-			let yValue = THREE.Math.lerp(minArray[0], maxArray[0], rangeY);
-			let zValue = THREE.Math.lerp(minArray[0], maxArray[0], rangeZ);
+			let xValue = THREE.Math.lerp( minArray[0], maxArray[0], rangeX );
+			let yValue = THREE.Math.lerp( minArray[1], maxArray[1], rangeY );
+			let zValue = THREE.Math.lerp( minArray[2], maxArray[2], rangeZ );
 
 			let output = new THREE.Vector3( xValue, yValue, zValue );
 			return output;
-		} 
+		}
 
+		// COMPOSER
+		let composer = new THREE.EffectComposer(renderer);
+		composer.addPass( new THREE.RenderPass( scene, camera ) );
+
+		// RENDER PASSES
+		pass = new THREE.SMAAPass(
+			window.innerWidth * renderer.getPixelRatio(),
+			window.innerHeight * renderer.getPixelRatio()
+		);
+		pass.renderToScreen = true;
+		composer.addPass( pass );
+
+		// RENDER LOOP
 		// Function to animate the scene on the canvas
 		function animate() {
-			// Tell the browser that you want to animate and request a function to update the animation on the next repaint - prevents off-tab animation
+			// Tell the browser that you want to animate, and request a function to update the animation on the next repaint. Prevents off-tab animation.
 			requestAnimationFrame( animate );
 
-			if (model) camera.lookAt( setFocalPosition(.5,.85,.5) );
+			stats.begin();
 
-			//Render the scene and the camera 
-			renderer.render( scene, camera );
+			// If the model's loaded, set the camera to look at it a given point in it.
+			if (model) camera.lookAt( setPointInModel(.5,.5,.5) );
+			// Position floorPlane for shadows
+			if (boundingBoxFinal) floorPlane.position.y = boundingBoxFinal.min.y;
+
+			// Render the scene and the camera 
+			// renderer.render( scene, camera );
+			composer.render();
+			stats.end();
 		}
 		animate();
 	</script>
