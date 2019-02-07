@@ -9,151 +9,184 @@
 	<div id="container" style="height:3000px;">
 	</div>
 	<script src="three.min.js"></script>
-	<script src="stats.min.js"></script>
 
+	<script src="DepthLimitedBlurShader.js"></script>
 	<script src="CopyShader.js"></script>
 	<script src="SMAAShader.js"></script>
+	<script src="SAOShader.js"></script>
+	<script src="SSAOShader.js"></script>
 
 	<script src="EffectComposer.js"></script>
 	<script src="SMAAPass.js"></script>
+	<script src="SAOPass.js"></script>
+	<script src="SSAOPass.js"></script>
 	<script src="GLTFLoader.js"></script>
 	<script src="RenderPass.js"></script>
 	<script src="ShaderPass.js"></script>
+
+	<script src="SimplexNoise.js"></script>
+	<script src="stats.min.js"></script>
 	<script>
 
-		// INITIAL ASSIGNS
-		// Assign global variables
-		let model, boundingBoxFinal;
-		let container = document.getElementById( 'container' );
 
-		// CREATE SCENE
-		let scene = new THREE.Scene();
+		let scene, camera, floorPlane, model, boundingBoxFinal, stats, composer, ssaoPass;
 
-		// CREATE CAMERA
-		// Create camera and set its position
-		let camera = new THREE.PerspectiveCamera(
-			75, // FOV
-			window.innerWidth / window.innerHeight, // Aspect ratio
-			0.1, // minimum render distance
-			1000 // maximum render distance
-		);
-		camera.position.x = -.5;
-		camera.position.y = .3;
-		camera.position.z = .6;
-
-		// CREATE LIGHTS
-		// Add directional light to scene
-		let directionalLight = new THREE.DirectionalLight();
-		directionalLight.position.set( 0, 3, 0 );
-		directionalLight.castShadow = true;
-		scene.add( directionalLight );
-
-		// CREATE GEOMETRY
-		// Add floor plane to scene
-		let floorGeometry = new THREE.PlaneGeometry( 2, 2 );
-		let floorMaterial = new THREE.ShadowMaterial();
-		let floorPlane = new THREE.Mesh( floorGeometry, floorMaterial );
-		floorPlane.rotation.x -= Math.PI / 2;
-		scene.add( floorPlane );
-
-		// CREATE RENDERER
-		let renderer = new THREE.WebGLRenderer(
-			{ alpha: true },
-			{ antialias: true }
-		);
-		renderer.physicallyCorrectLights = true;
-		renderer.gammaOutput = true;
-		renderer.gammaFactor = 2.2;
-		renderer.shadowMap.enabled = true;
-		renderer.shadowMap.autoUpdate = true;
-		renderer.setPixelRatio(window.devicePixelRatio);
-		renderer.setSize( window.innerWidth, window.innerHeight );
-		renderer.setClearColor( 0xffffff, 0 );
-		container.appendChild( renderer.domElement );
-		renderer.domElement.style.position = "fixed";
-
-		// ADD STATS
-		let stats = new Stats();
-		container.appendChild( stats.dom );
-
-		// ADD GLTF LOADER
-		let objectLoader = new THREE.GLTFLoader();
-		objectLoader.load(
-			// Select specific GLTF file
-			'bust_of_emperor_commodus_getty_villa/scene.gltf',
-			// If working, add gltf to scene
-			function ( gltf ) {
-				model = gltf.scene;
-
-				// Create bounding box with info on size, then rescale to max size of 1
-				let boundingBox = new THREE.Box3().setFromObject( model );
-				let boundingBoxSize = boundingBox.getSize( new THREE.Vector3() );
-				let maxAxis = Math.max( boundingBoxSize.x, boundingBoxSize.y, boundingBoxSize.z );
-				model.scale.multiplyScalar( 1.0 / maxAxis );
-
-			    model.traverse( function( node ) {
-			        if ( node.isMesh ) { node.castShadow = true; }
-			    } );
-
-				// Reset bounding box, create its center as inverted array, translate model along that array, reset bounding box
-				boundingBox.setFromObject(model);
-				let boxCenter = boundingBox.getCenter( new THREE.Vector3() );
-				let centerArrayInverse = [];
-				let centerInverse = boxCenter.multiplyScalar( -1 ).toArray(centerArrayInverse);
-				model.translateX( centerArrayInverse[0] );
-				model.translateY( centerArrayInverse[1] );
-				model.translateZ( centerArrayInverse[2] );
-				boundingBoxFinal = boundingBox.setFromObject(model);
-
-				// Add bounding box helper
-				let boundingBoxHelper = new THREE.Box3Helper(boundingBox, 0xffff00);
-				scene.add(boundingBoxHelper);
+		init();
+		animate();
 
 
-				let gridHelper = new THREE.GridHelper();
-				scene.add(gridHelper);
+		function init() {
+
+			// INITIAL ASSIGNS
+			// Assign global variables, width, height
+			let container = document.getElementById( 'container' );
+			let width = window.innerWidth;
+			let height = window. innerHeight
+
+			// CREATE SCENE
+			scene = new THREE.Scene();
+
+			// CREATE CAMERA
+			// Create camera and set its position
+			camera = new THREE.PerspectiveCamera(
+				75, // FOV
+				width / height, // Aspect ratio
+				0.1, // minimum render distance
+				100 // maximum render distance
+			);
+			camera.position.x = -.5;
+			camera.position.y = .3;
+			camera.position.z = .6;
+
+			// CREATE LIGHTS
+			// Add point light to scene
+			let pointLight = new THREE.PointLight(0xffffff, 1);
+			pointLight.position.set( -.1, 1, -.1 );
+			pointLight.castShadow = true;
+			pointLight.shadow.radius = 3;
+			pointLight.shadow.bias = .001;
+			pointLight.shadow.mapSize.width = 4096;
+			pointLight.shadow.mapSize.height = 4096;
+			scene.add( pointLight );
+
+			// CREATE GEOMETRY
+			// Add floor plane to scene
+			let floorGeometry = new THREE.PlaneGeometry( 2, 2 );
+			let floorMaterial = new THREE.ShadowMaterial();
+			floorPlane = new THREE.Mesh( floorGeometry, floorMaterial );
+			floorPlane.rotation.x -= Math.PI / 2;
+			floorPlane.receiveShadow = true;
+			scene.add( floorPlane );
+
+			// CREATE RENDERER
+			let renderer = new THREE.WebGLRenderer(
+				{ alpha: true },
+				{ antialias: true }
+			);
+			renderer.physicallyCorrectLights = true;
+			renderer.gammaOutput = true;
+			renderer.gammaFactor = 2.2;
+			renderer.shadowMap.enabled = true;
+			renderer.shadowMap.type = THREE.PCFShadowMap;
+			renderer.shadowMap.autoUpdate = true;
+			renderer.setPixelRatio(window.devicePixelRatio);
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			renderer.setClearColor( 0xffffff, 0 );
+			container.appendChild( renderer.domElement );
+			renderer.domElement.style.position = "fixed";
+
+			// ADD STATS
+			stats = new Stats();
+			container.appendChild( stats.dom );
+
+			// COMPOSER
+			composer = new THREE.EffectComposer(renderer);
+			composer.addPass( new THREE.RenderPass( scene, camera ) );
+
+			// RENDER PASSES
+			smaaPass = new THREE.SMAAPass(
+				window.innerWidth * renderer.getPixelRatio(),
+				window.innerHeight * renderer.getPixelRatio()
+			);
+			smaaPass.renderToScreen = true;
+			composer.addPass( smaaPass );
+			// saoPass = new THREE.SAOPass( scene, camera, false, true );
+			// saoPass.renderToScreen = true;
+			// composer.addPass( saoPass );
+			ssaoPass = new THREE.SSAOPass( scene, camera, width, height );
+			ssaoPass.renderToScreen = true;
+			composer.addPass( ssaoPass );
+
+			// ADD GLTF LOADER
+			let objectLoader = new THREE.GLTFLoader();
+			objectLoader.load(
+				// Select specific GLTF file
+				'bust_of_emperor_commodus_getty_villa/scene.gltf',
+				// If working, add gltf to scene
+				function ( gltf ) {
+					model = gltf.scene;
+
+					// Create bounding box with info on size, then rescale to max size of 1
+					let boundingBox = new THREE.Box3().setFromObject( model );
+					let boundingBoxSize = boundingBox.getSize( new THREE.Vector3() );
+					let maxAxis = Math.max( boundingBoxSize.x, boundingBoxSize.y, boundingBoxSize.z );
+					model.scale.multiplyScalar( 1.0 / maxAxis );
+
+					// Set all geometry within model to both cast and recieve shadows
+				    model.traverse( function( node ) {
+				        if ( node.isMesh ) { node.castShadow = true, node.receive = true }
+				    } );
+
+				    model.updateMatrixWorld();
+
+					// Reset bounding box, create its center as inverted array, translate model along that array, reset bounding box
+					boundingBox.setFromObject(model);
+					let boxCenter = boundingBox.getCenter( new THREE.Vector3() );
+				    model.position.x += (model.position.x - boxCenter.x);
+				    model.position.y += (model.position.y - boxCenter.y);
+				    model.position.z += (model.position.z - boxCenter.z);
+					boundingBoxFinal = boundingBox.setFromObject(model);
 
 
-				scene.add( model );
-			},
-			//Create 'loading' countdown output
-			function ( xhr ) {
-				console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
-			},
-			//Create 'error' output
-			function ( error ) {
-				console.log ( 'An error happened' );
+					// Add bounding box helper
+					let boundingBoxHelper = new THREE.Box3Helper(boundingBox, 0xffff00);
+					scene.add(boundingBoxHelper);
+
+					// Add grid helper
+					let gridHelper = new THREE.GridHelper();
+					scene.add(gridHelper);
+
+					// Add model to scene
+					scene.add( model );
+				},
+				// Create 'loading' countdown output
+				function ( xhr ) {
+					console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
+				},
+				// Create 'error' output
+				function ( error ) {
+					console.log ( 'An error happened' );
+				}
+			);
+
+			// CREATE FOCAL POINT
+			// Creates a vector in reference to the bounding box of a given model.
+			// Takes three values, usually set in a closed interval between 0 and 1.
+			// Creates arrays from vectors of min and max of bounding box, then uses provided values to interpolate between the two ends of this range, returning the output as a single vector.
+			setPointInModel = function( rangeX, rangeY, rangeZ ) {
+				let minArray = [], maxArray = [];
+				boundingBoxFinal.min.toArray( minArray );
+				boundingBoxFinal.max.toArray( maxArray );
+
+				let xValue = THREE.Math.lerp( minArray[0], maxArray[0], rangeX );
+				let yValue = THREE.Math.lerp( minArray[1], maxArray[1], rangeY );
+				let zValue = THREE.Math.lerp( minArray[2], maxArray[2], rangeZ );
+
+				let output = new THREE.Vector3( xValue, yValue, zValue );
+				return output;
 			}
-		);
-
-		// CREATE FOCAL POINT
-		// Creates a vector in reference to the bounding box of a given model.
-		// Takes three values, usually set in a closed interval between 0 and 1.
-		// Creates arrays from vectors of min and max of bounding box, then uses provided values to interpolate between the two ends of this range, returning the output as a single vector.
-		setPointInModel = function( rangeX, rangeY, rangeZ ) {
-			let minArray = [], maxArray = [];
-			boundingBoxFinal.min.toArray( minArray );
-			boundingBoxFinal.max.toArray( maxArray );
-
-			let xValue = THREE.Math.lerp( minArray[0], maxArray[0], rangeX );
-			let yValue = THREE.Math.lerp( minArray[1], maxArray[1], rangeY );
-			let zValue = THREE.Math.lerp( minArray[2], maxArray[2], rangeZ );
-
-			let output = new THREE.Vector3( xValue, yValue, zValue );
-			return output;
 		}
 
-		// COMPOSER
-		let composer = new THREE.EffectComposer(renderer);
-		composer.addPass( new THREE.RenderPass( scene, camera ) );
-
-		// RENDER PASSES
-		pass = new THREE.SMAAPass(
-			window.innerWidth * renderer.getPixelRatio(),
-			window.innerHeight * renderer.getPixelRatio()
-		);
-		pass.renderToScreen = true;
-		composer.addPass( pass );
 
 		// RENDER LOOP
 		// Function to animate the scene on the canvas
@@ -173,6 +206,5 @@
 			composer.render();
 			stats.end();
 		}
-		animate();
 	</script>
 </body>
