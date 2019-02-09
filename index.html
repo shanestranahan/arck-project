@@ -10,26 +10,18 @@
 	</div>
 	<script src="three.min.js"></script>
 
-	<script src="DepthLimitedBlurShader.js"></script>
 	<script src="CopyShader.js"></script>
-	<script src="SMAAShader.js"></script>
-	<script src="SAOShader.js"></script>
-	<script src="SSAOShader.js"></script>
 
 	<script src="EffectComposer.js"></script>
-	<script src="SMAAPass.js"></script>
-	<script src="SAOPass.js"></script>
-	<script src="SSAOPass.js"></script>
 	<script src="GLTFLoader.js"></script>
 	<script src="RenderPass.js"></script>
 	<script src="ShaderPass.js"></script>
 
-	<script src="SimplexNoise.js"></script>
 	<script src="stats.min.js"></script>
 	<script>
 
 
-		let scene, camera, floorPlane, model, boundingBoxFinal, stats, composer, ssaoPass;
+		let scene, camera, model, boundingBoxFinal, stats, composer;
 
 		init();
 		animate();
@@ -54,29 +46,8 @@
 				0.1, // minimum render distance
 				100 // maximum render distance
 			);
-			camera.position.x = -.5;
 			camera.position.y = .3;
-			camera.position.z = .6;
-
-			// CREATE LIGHTS
-			// Add point light to scene
-			let pointLight = new THREE.PointLight(0xffffff, 1);
-			pointLight.position.set( -.1, 1, -.1 );
-			pointLight.castShadow = true;
-			pointLight.shadow.radius = 3;
-			pointLight.shadow.bias = .001;
-			pointLight.shadow.mapSize.width = 4096;
-			pointLight.shadow.mapSize.height = 4096;
-			scene.add( pointLight );
-
-			// CREATE GEOMETRY
-			// Add floor plane to scene
-			let floorGeometry = new THREE.PlaneGeometry( 2, 2 );
-			let floorMaterial = new THREE.ShadowMaterial();
-			floorPlane = new THREE.Mesh( floorGeometry, floorMaterial );
-			floorPlane.rotation.x -= Math.PI / 2;
-			floorPlane.receiveShadow = true;
-			scene.add( floorPlane );
+			camera.position.z = 1;
 
 			// CREATE RENDERER
 			let renderer = new THREE.WebGLRenderer(
@@ -100,22 +71,10 @@
 			container.appendChild( stats.dom );
 
 			// COMPOSER
-			composer = new THREE.EffectComposer(renderer);
-			composer.addPass( new THREE.RenderPass( scene, camera ) );
-
-			// RENDER PASSES
-			smaaPass = new THREE.SMAAPass(
-				window.innerWidth * renderer.getPixelRatio(),
-				window.innerHeight * renderer.getPixelRatio()
-			);
-			smaaPass.renderToScreen = true;
-			composer.addPass( smaaPass );
-			// saoPass = new THREE.SAOPass( scene, camera, false, true );
-			// saoPass.renderToScreen = true;
-			// composer.addPass( saoPass );
-			ssaoPass = new THREE.SSAOPass( scene, camera, width, height );
-			ssaoPass.renderToScreen = true;
-			composer.addPass( ssaoPass );
+			composer = new THREE.EffectComposer( renderer );
+			let renderPass = new THREE.RenderPass( scene, camera );
+			composer.addPass( renderPass );
+			renderPass.renderToScreen = true;
 
 			// ADD GLTF LOADER
 			let objectLoader = new THREE.GLTFLoader();
@@ -132,12 +91,6 @@
 					let maxAxis = Math.max( boundingBoxSize.x, boundingBoxSize.y, boundingBoxSize.z );
 					model.scale.multiplyScalar( 1.0 / maxAxis );
 
-					// Set all geometry within model to both cast and recieve shadows
-				    model.traverse( function( node ) {
-				        if ( node.isMesh ) { node.castShadow = true, node.receive = true }
-				    } );
-
-				    model.updateMatrixWorld();
 
 					// Reset bounding box, create its center as inverted array, translate model along that array, reset bounding box
 					boundingBox.setFromObject(model);
@@ -156,6 +109,7 @@
 					let gridHelper = new THREE.GridHelper();
 					scene.add(gridHelper);
 
+				    model.updateMatrixWorld();
 					// Add model to scene
 					scene.add( model );
 				},
@@ -168,24 +122,30 @@
 					console.log ( 'An error happened' );
 				}
 			);
-
-			// CREATE FOCAL POINT
-			// Creates a vector in reference to the bounding box of a given model.
-			// Takes three values, usually set in a closed interval between 0 and 1.
-			// Creates arrays from vectors of min and max of bounding box, then uses provided values to interpolate between the two ends of this range, returning the output as a single vector.
-			setPointInModel = function( rangeX, rangeY, rangeZ ) {
-				let minArray = [], maxArray = [];
-				boundingBoxFinal.min.toArray( minArray );
-				boundingBoxFinal.max.toArray( maxArray );
-
-				let xValue = THREE.Math.lerp( minArray[0], maxArray[0], rangeX );
-				let yValue = THREE.Math.lerp( minArray[1], maxArray[1], rangeY );
-				let zValue = THREE.Math.lerp( minArray[2], maxArray[2], rangeZ );
-
-				let output = new THREE.Vector3( xValue, yValue, zValue );
-				return output;
-			}
 		}
+
+		// CREATE FOCAL POINT
+		// Creates a vector in reference to the bounding box of a given model.
+		// Takes three values, usually set in a closed interval between 0 and 1.
+		// Creates arrays from vectors of min and max of bounding box, then uses provided values to interpolate between the two ends of this range, returning the output as a single vector.
+		setPointInModel = function( rangeX, rangeY, rangeZ ) {
+			let minArray = [], maxArray = [];
+			boundingBoxFinal.min.toArray( minArray );
+			boundingBoxFinal.max.toArray( maxArray );
+
+			let xValue = THREE.Math.lerp( minArray[0], maxArray[0], rangeX );
+			let yValue = THREE.Math.lerp( minArray[1], maxArray[1], rangeY );
+			let zValue = THREE.Math.lerp( minArray[2], maxArray[2], rangeZ );
+
+			let output = new THREE.Vector3( xValue, yValue, zValue );
+			return output;
+		}
+
+
+		window.addEventListener('scroll', function() {
+			camera.position.x = pageYOffset / 1000;
+			camera.position.z = 1 + (pageYOffset / 1000);
+		});
 
 
 		// RENDER LOOP
@@ -198,8 +158,6 @@
 
 			// If the model's loaded, set the camera to look at it a given point in it.
 			if (model) camera.lookAt( setPointInModel(.5,.5,.5) );
-			// Position floorPlane for shadows
-			if (boundingBoxFinal) floorPlane.position.y = boundingBoxFinal.min.y;
 
 			// Render the scene and the camera 
 			// renderer.render( scene, camera );
