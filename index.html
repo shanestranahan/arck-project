@@ -88,11 +88,11 @@
 
 			// CREATE CAMERA PATH
 			pathCurve = new THREE.CatmullRomCurve3( [
-					new THREE.Vector3( 0, 0, 1 ),
-					new THREE.Vector3( .3, .4, 0 ),
-					new THREE.Vector3( 0, .6, -.5 ),
-					new THREE.Vector3( -.35, .2, 0 ),
-					new THREE.Vector3( -.17, .29, .35 )
+					new THREE.Vector3( .3, .1, -1 ),
+					new THREE.Vector3( .7, .3, 0 ),
+					new THREE.Vector3( 0, .5, .75 ),
+					new THREE.Vector3( -.7, .3, 0 ),
+					new THREE.Vector3( 0, .3, -1 )
 				] );
 			let pathPoints = pathCurve.getPoints( 100 );
 			let pathGeometry = new THREE.BufferGeometry().setFromPoints( pathPoints );
@@ -135,7 +135,7 @@
 			let objectLoader = new THREE.GLTFLoader();
 			objectLoader.load(
 				// Select specific GLTF file
-				'bust_of_emperor_commodus_getty_villa/scene.gltf',
+				'chief_regalia/scene.gltf',
 				// If working, add gltf to scene
 				function ( gltf ) {
 					model = gltf.scene;
@@ -200,7 +200,7 @@
 			camera.position.copy( setCameraPosition() );
 
 			// If the model's loaded, set the camera to look at a given point in it
-			if (model) camera.lookAt( setPointInModel(.5,.8,.5) );
+			if (model) camera.lookAt( setPointInModel(.5,.5,.5) );
 
 			composer.render();
 
