@@ -9,16 +9,17 @@
 	<div id="container" style="height:8000px;">
 	</div>
 	<script src="three.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/16.3.5/Tween.min.js"></script>
 
 	<script src="CopyShader.js"></script>
 	<script src="SMAAShader.js"></script>
-	<script src="DepthLimitedBlurShader.js"></script>
 
 	<script src="EffectComposer.js"></script>
-	<script src="GLTFLoader.js"></script>
 	<script src="RenderPass.js"></script>
 	<script src="ShaderPass.js"></script>
 	<script src="SMAAPass.js"></script>
+
+	<script src="GLTFLoader.js"></script>
 
 	<script src="stats.min.js"></script>
 	<script>
@@ -27,21 +28,6 @@
 		let scene, camera, model, pathCurve, boundingBoxFinal, stats, composer;
 		let width = window.innerWidth;
 		let height = window. innerHeight;
-
-
-		// Create camera path
-		pathCurve = new THREE.CatmullRomCurve3( [
-				new THREE.Vector3( 0, 0, 1 ),
-				new THREE.Vector3( 1, .3, 0 ),
-				new THREE.Vector3( 0, .6, -1 ),
-				new THREE.Vector3( -1, .3, 0 )
-			] );
-		pathCurve.closed = true;
-		pathCurve.curveType = 'centripetal';
-		let pathPoints = pathCurve.getPoints( 100 );
-		let pathGeometry = new THREE.BufferGeometry().setFromPoints( pathPoints );
-		let pathMaterial = new THREE.LineBasicMaterial( { color: 0x000000 } );
-		let cameraPath = new THREE.Mesh( pathGeometry, pathMaterial );
 
 		// CREATE FOCAL POINT
 		// Creates a vector in reference to the bounding box of a given model
@@ -70,10 +56,26 @@
 
 		// USED TO SET CAMERA POSITION
 		// Get scroll percentage, return position on curve to match that percentage
-		cameraPosition = function() {
+		setCameraPosition = function() {
 			let p = (getScrollPercent() / 100);
 			let position = pathCurve.getPointAt( p );
 			return position;
+		}
+
+		animateCamera = function(){
+		    let to = setCameraPosition(),
+		        easing = TWEEN.Easing.Quadratic.In,
+		        duration = 15;
+		    // create the tween
+		    let tween = new TWEEN.Tween(camera.position)
+		    tween.to({ x: to.x, y: to.y, z: to.z, }, duration)
+		    tween.easing(easing)
+		    tween.onUpdate()
+		    tween.onComplete();
+		    // start the tween
+		    tween.start();
+		    // return the tween in case we want to manipulate it later on
+		    return tween;
 		}
 
 		init();
@@ -99,6 +101,20 @@
 			);
 			camera.position.y = .3;
 			camera.position.z = 2;
+
+			// CREATE CAMERA PATH
+			pathCurve = new THREE.CatmullRomCurve3( [
+					new THREE.Vector3( 0, 0, 1 ),
+					new THREE.Vector3( 1, .3, 0 ),
+					new THREE.Vector3( 0, .6, -1 ),
+					new THREE.Vector3( -1, .3, 0 )
+				] );
+			pathCurve.closed = true;
+			pathCurve.tension = 1;
+			let pathPoints = pathCurve.getPoints( 100 );
+			let pathGeometry = new THREE.BufferGeometry().setFromPoints( pathPoints );
+			let pathMaterial = new THREE.LineBasicMaterial( { color: 0x000000 } );
+			let cameraPath = new THREE.Mesh( pathGeometry, pathMaterial );
 
 			// CREATE RENDERER
 			let renderer = new THREE.WebGLRenderer(
@@ -148,7 +164,7 @@
 					model.scale.multiplyScalar( 1.0 / maxAxis );
 
 
-					// Reset bounding box, create its center as inverted array, translate model along that array, reset bounding box
+					// Reset bounding box, set model's position to that box's center, reset bounding box
 					boundingBox.setFromObject(model);
 					let boxCenter = boundingBox.getCenter( new THREE.Vector3() );
 				    model.position.x += (model.position.x - boxCenter.x);
@@ -179,7 +195,7 @@
 				}
 			);
 
-			window.addEventListener('scroll', cameraPosition());
+			window.addEventListener('scroll', setCameraPosition());
 		}
 
 		// RENDER LOOP
@@ -193,7 +209,8 @@
 			if (model) camera.lookAt( setPointInModel(.5,.7,.5) );
 
 			// Set camera to position
-			camera.position.copy( cameraPosition() );
+			//camera.position.copy( setCameraPosition() );
+			animateCamera();
 
 			composer.render();
 
