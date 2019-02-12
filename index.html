@@ -9,7 +9,6 @@
 	<div id="container" style="height:8000px;">
 	</div>
 	<script src="three.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/16.3.5/Tween.min.js"></script>
 
 	<script src="CopyShader.js"></script>
 	<script src="SMAAShader.js"></script>
@@ -62,22 +61,6 @@
 			return position;
 		}
 
-		animateCamera = function(){
-		    let to = setCameraPosition(),
-		        easing = TWEEN.Easing.Quadratic.In,
-		        duration = 15;
-		    // create the tween
-		    let tween = new TWEEN.Tween(camera.position)
-		    tween.to({ x: to.x, y: to.y, z: to.z, }, duration)
-		    tween.easing(easing)
-		    tween.onUpdate()
-		    tween.onComplete();
-		    // start the tween
-		    tween.start();
-		    // return the tween in case we want to manipulate it later on
-		    return tween;
-		}
-
 		init();
 		animate();
 
@@ -105,15 +88,14 @@
 			// CREATE CAMERA PATH
 			pathCurve = new THREE.CatmullRomCurve3( [
 					new THREE.Vector3( 0, 0, 1 ),
-					new THREE.Vector3( 1, .3, 0 ),
-					new THREE.Vector3( 0, .6, -1 ),
-					new THREE.Vector3( -1, .3, 0 )
+					new THREE.Vector3( .3, .4, 0 ),
+					new THREE.Vector3( 0, .6, -.5 ),
+					new THREE.Vector3( -.35, .2, 0 ),
+					new THREE.Vector3( -.17, .29, .35 )
 				] );
-			pathCurve.closed = true;
-			pathCurve.tension = 1;
 			let pathPoints = pathCurve.getPoints( 100 );
 			let pathGeometry = new THREE.BufferGeometry().setFromPoints( pathPoints );
-			let pathMaterial = new THREE.LineBasicMaterial( { color: 0x000000 } );
+			let pathMaterial = new THREE.LineBasicMaterial( { color: 0xffffff } );
 			let cameraPath = new THREE.Mesh( pathGeometry, pathMaterial );
 
 			// CREATE RENDERER
@@ -206,11 +188,10 @@
 			stats.begin();
 
 			// If the model's loaded, set the camera to look at a given point in it
-			if (model) camera.lookAt( setPointInModel(.5,.7,.5) );
+			if (model) camera.lookAt( setPointInModel(.5,.8,.5) );
 
 			// Set camera to position
-			//camera.position.copy( setCameraPosition() );
-			animateCamera();
+			camera.position.copy( setCameraPosition() );
 
 			composer.render();
 
