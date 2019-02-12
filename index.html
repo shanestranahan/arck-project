@@ -6,22 +6,75 @@
 	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, initial-scale=1">
 </head>
 <body style="margin:0;">
-	<div id="container" style="height:3000px;">
+	<div id="container" style="height:8000px;">
 	</div>
 	<script src="three.min.js"></script>
 
 	<script src="CopyShader.js"></script>
+	<script src="SMAAShader.js"></script>
+	<script src="DepthLimitedBlurShader.js"></script>
 
 	<script src="EffectComposer.js"></script>
 	<script src="GLTFLoader.js"></script>
 	<script src="RenderPass.js"></script>
 	<script src="ShaderPass.js"></script>
+	<script src="SMAAPass.js"></script>
 
 	<script src="stats.min.js"></script>
 	<script>
 
 
-		let scene, camera, model, boundingBoxFinal, stats, composer;
+		let scene, camera, model, pathCurve, boundingBoxFinal, stats, composer;
+		let width = window.innerWidth;
+		let height = window. innerHeight;
+
+
+		// Create camera path
+		pathCurve = new THREE.CatmullRomCurve3( [
+				new THREE.Vector3( 0, 0, 1 ),
+				new THREE.Vector3( 1, .3, 0 ),
+				new THREE.Vector3( 0, .6, -1 ),
+				new THREE.Vector3( -1, .3, 0 )
+			] );
+		pathCurve.closed = true;
+		pathCurve.curveType = 'centripetal';
+		let pathPoints = pathCurve.getPoints( 100 );
+		let pathGeometry = new THREE.BufferGeometry().setFromPoints( pathPoints );
+		let pathMaterial = new THREE.LineBasicMaterial( { color: 0x000000 } );
+		let cameraPath = new THREE.Mesh( pathGeometry, pathMaterial );
+
+		// CREATE FOCAL POINT
+		// Creates a vector in reference to the bounding box of a given model
+		// Takes three values, usually set in a closed interval between 0 and 1
+		setPointInModel = function( rangeX, rangeY, rangeZ ) {
+			let minArray = [], maxArray = [];
+			boundingBoxFinal.min.toArray( minArray );
+			boundingBoxFinal.max.toArray( maxArray );
+
+			let xOut = THREE.Math.lerp( minArray[0], maxArray[0], rangeX );
+			let yOut = THREE.Math.lerp( minArray[1], maxArray[1], rangeY );
+			let zOut = THREE.Math.lerp( minArray[2], maxArray[2], rangeZ );
+
+			let output = new THREE.Vector3( xOut, yOut, zOut );
+			return output;
+		}
+
+		// USED TO PASS PAGE SCROLL AS PERCENTAGE
+		getScrollPercent = function() {
+		    var h = document.documentElement, 
+		        b = document.body,
+		        st = 'scrollTop',
+		        sh = 'scrollHeight';
+		    return (h[st]||b[st]) / ((h[sh]||b[sh]) - h.clientHeight) * 100;
+		}
+
+		// USED TO SET CAMERA POSITION
+		// Get scroll percentage, return position on curve to match that percentage
+		cameraPosition = function() {
+			let p = (getScrollPercent() / 100);
+			let position = pathCurve.getPointAt( p );
+			return position;
+		}
 
 		init();
 		animate();
@@ -32,8 +85,6 @@
 			// INITIAL ASSIGNS
 			// Assign global variables, width, height
 			let container = document.getElementById( 'container' );
-			let width = window.innerWidth;
-			let height = window. innerHeight
 
 			// CREATE SCENE
 			scene = new THREE.Scene();
@@ -47,7 +98,7 @@
 				100 // maximum render distance
 			);
 			camera.position.y = .3;
-			camera.position.z = 1;
+			camera.position.z = 2;
 
 			// CREATE RENDERER
 			let renderer = new THREE.WebGLRenderer(
@@ -57,9 +108,6 @@
 			renderer.physicallyCorrectLights = true;
 			renderer.gammaOutput = true;
 			renderer.gammaFactor = 2.2;
-			renderer.shadowMap.enabled = true;
-			renderer.shadowMap.type = THREE.PCFShadowMap;
-			renderer.shadowMap.autoUpdate = true;
 			renderer.setPixelRatio(window.devicePixelRatio);
 			renderer.setSize( window.innerWidth, window.innerHeight );
 			renderer.setClearColor( 0xffffff, 0 );
@@ -74,7 +122,15 @@
 			composer = new THREE.EffectComposer( renderer );
 			let renderPass = new THREE.RenderPass( scene, camera );
 			composer.addPass( renderPass );
-			renderPass.renderToScreen = true;
+
+			let smaaPass = new THREE.SMAAPass(
+				width * renderer.getPixelRatio(),
+				height * renderer.getPixelRatio()
+			);
+			smaaPass.renderToScreen = true;
+			composer.addPass( smaaPass );
+
+			scene.add( cameraPath );
 
 			// ADD GLTF LOADER
 			let objectLoader = new THREE.GLTFLoader();
@@ -122,46 +178,25 @@
 					console.log ( 'An error happened' );
 				}
 			);
+
+			window.addEventListener('scroll', cameraPosition());
 		}
-
-		// CREATE FOCAL POINT
-		// Creates a vector in reference to the bounding box of a given model.
-		// Takes three values, usually set in a closed interval between 0 and 1.
-		// Creates arrays from vectors of min and max of bounding box, then uses provided values to interpolate between the two ends of this range, returning the output as a single vector.
-		setPointInModel = function( rangeX, rangeY, rangeZ ) {
-			let minArray = [], maxArray = [];
-			boundingBoxFinal.min.toArray( minArray );
-			boundingBoxFinal.max.toArray( maxArray );
-
-			let xValue = THREE.Math.lerp( minArray[0], maxArray[0], rangeX );
-			let yValue = THREE.Math.lerp( minArray[1], maxArray[1], rangeY );
-			let zValue = THREE.Math.lerp( minArray[2], maxArray[2], rangeZ );
-
-			let output = new THREE.Vector3( xValue, yValue, zValue );
-			return output;
-		}
-
-
-		window.addEventListener('scroll', function() {
-			camera.position.x = pageYOffset / 1000;
-			camera.position.z = 1 + (pageYOffset / 1000);
-		});
-
 
 		// RENDER LOOP
 		// Function to animate the scene on the canvas
 		function animate() {
-			// Tell the browser that you want to animate, and request a function to update the animation on the next repaint. Prevents off-tab animation.
 			requestAnimationFrame( animate );
 
 			stats.begin();
 
-			// If the model's loaded, set the camera to look at it a given point in it.
-			if (model) camera.lookAt( setPointInModel(.5,.5,.5) );
+			// If the model's loaded, set the camera to look at a given point in it
+			if (model) camera.lookAt( setPointInModel(.5,.7,.5) );
 
-			// Render the scene and the camera 
-			// renderer.render( scene, camera );
+			// Set camera to position
+			camera.position.copy( cameraPosition() );
+
 			composer.render();
+
 			stats.end();
 		}
 	</script>
