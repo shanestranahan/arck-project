@@ -187,11 +187,11 @@
 
 			stats.begin();
 
-			// If the model's loaded, set the camera to look at a given point in it
-			if (model) camera.lookAt( setPointInModel(.5,.8,.5) );
-
 			// Set camera to position
 			camera.position.copy( setCameraPosition() );
+
+			// If the model's loaded, set the camera to look at a given point in it
+			if (model) camera.lookAt( setPointInModel(.5,.8,.5) );
 
 			composer.render();
 
