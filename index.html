@@ -25,8 +25,6 @@
 
 
 		let scene, camera, model, pathCurve, boundingBoxFinal, stats, composer;
-		let width = window.innerWidth;
-		let height = window. innerHeight;
 
 		// CREATE FOCAL POINT
 		// Creates a vector in reference to the bounding box of a given model
@@ -66,6 +64,9 @@
 
 
 		function init() {
+
+			let width = window.innerWidth;
+			let height = window. innerHeight;	
 
 			// INITIAL ASSIGNS
 			// Assign global variables, width, height
@@ -177,14 +178,13 @@
 				}
 			);
 
-			window.addEventListener('scroll', setCameraPosition());
-			window.addEventListener( 'resize', onWindowResize, false );
+			window.addEventListener('scroll', setCameraPosition() );
 		}
-		
+
 		function onWindowResize() {
 			camera.aspect = window.innerWidth / window.innerHeight;
 			camera.updateProjectionMatrix();
-			renderer.setSize( window.innerWidth, window.innerHeight );
+			composer.renderer.setSize( window.innerWidth, window.innerHeight );
 		}
 
 		// RENDER LOOP
@@ -193,6 +193,8 @@
 			requestAnimationFrame( animate );
 
 			stats.begin();
+
+			window.addEventListener( 'resize', onWindowResize() );
 
 			// Set camera to position
 			camera.position.copy( setCameraPosition() );
